@@ -1,0 +1,21 @@
+{
+  "num_samples": 5001,
+  "stimulus": "wall_ridge_frame.urdf",
+  "frame_size_mm": 120.0,
+  "ridge_width_mm": 5.0,
+  "sampling": "sequential_perimeter",
+  "sides": [
+    "bottom",
+    "right",
+    "top",
+    "left"
+  ],
+  "n_straight": 3460,
+  "n_corner": 1541,
+  "corner_threshold_mm": 18.5,
+  "sensor": "tactip_standard",
+  "image_size": [
+    128,
+    128
+  ]
+}

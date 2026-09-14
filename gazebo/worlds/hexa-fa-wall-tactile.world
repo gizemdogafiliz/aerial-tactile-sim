@@ -1,0 +1,163 @@
+<?xml version="1.0"?>
+<sdf version="1.5">
+  <world name="mrsim">
+    <physics name='1ms' type='unused'>
+      <max_step_size>0.002000</max_step_size>
+      <real_time_factor>1.000000</real_time_factor>
+      <real_time_update_rate>500.000000</real_time_update_rate>
+      <gravity>0 0 -9.81</gravity>
+      <magnetic_field>23.816e-6 -0.41e-6 -39.829e-6</magnetic_field>
+    </physics>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <attenuation><range>1000</range><constant>0.9</constant><linear>0.01</linear><quadratic>0.001</quadratic></attenuation>
+      <direction>0.5 0.1 -0.9</direction>
+    </light>
+
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><plane><normal>0 0 1.0</normal><size>100 100</size></plane></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><plane><normal>0 0 1.0</normal><size>100 100</size></plane></geometry>
+          <material><ambient>0.2 0.8 0.2 1</ambient><diffuse>0.2 0.8 0.2 1</diffuse><specular>0.2 0.8 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Thin static wall at x=2.0 for contact inspection task -->
+    <!-- Wall is 4m wide (Y) and 4m tall (Z), 2cm thick along X -->
+    <model name="contact_wall">
+      <static>true</static>
+      <pose>2.01 0 2.0 0 0 0</pose>
+      <link name="wall">
+        <collision name="collision">
+          <geometry>
+            <box><size>0.02 4.0 4.0</size></box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>0.3</mu>
+                <mu2>0.3</mu2>
+              </ode>
+            </friction>
+            <contact>
+              <ode>
+                <kp>500.0</kp>
+                <kd>50.0</kd>
+                <max_vel>0.0</max_vel>
+                <min_depth>0.001</min_depth>
+              </ode>
+            </contact>
+          </surface>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box><size>0.02 4.0 4.0</size></box>
+          </geometry>
+          <material>
+            <ambient>0.7 0.7 0.8 1</ambient>
+            <diffuse>0.7 0.7 0.8 1</diffuse>
+            <specular>0.3 0.3 0.4 1</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Rectangular ridge frame on wall for tactile edge following -->
+    <!-- 1m x 1m frame matching the drone's square trajectory -->
+    <!-- EE tip traces: y=[0,1], z=[0.875,1.875] on the wall surface -->
+    <!-- Ridges protrude 5mm from wall toward drone (-x direction) -->
+    <!-- 5mm realistic for weld seams / panel edges; 20mm sphere passes over -->
+    <model name="wall_frame">
+      <static>true</static>
+      <link name="frame">
+        <!-- Bottom ridge: horizontal, spans full width including corners -->
+        <!-- Y: [-0.0025, 1.0025], Z: [0.8725, 0.8775] -->
+        <collision name="ridge_bottom">
+          <pose>1.9975 0.5 0.875 0 0 0</pose>
+          <geometry><box><size>0.005 1.005 0.005</size></box></geometry>
+        </collision>
+        <visual name="ridge_bottom_vis">
+          <pose>1.9975 0.5 0.875 0 0 0</pose>
+          <geometry><box><size>0.005 1.005 0.005</size></box></geometry>
+          <material>
+            <ambient>0.6 0.1 0.1 1</ambient>
+            <diffuse>0.7 0.15 0.15 1</diffuse>
+          </material>
+        </visual>
+
+        <!-- Top ridge: horizontal, spans full width including corners -->
+        <!-- Y: [-0.0025, 1.0025], Z: [1.8725, 1.8775] -->
+        <collision name="ridge_top">
+          <pose>1.9975 0.5 1.875 0 0 0</pose>
+          <geometry><box><size>0.005 1.005 0.005</size></box></geometry>
+        </collision>
+        <visual name="ridge_top_vis">
+          <pose>1.9975 0.5 1.875 0 0 0</pose>
+          <geometry><box><size>0.005 1.005 0.005</size></box></geometry>
+          <material>
+            <ambient>0.6 0.1 0.1 1</ambient>
+            <diffuse>0.7 0.15 0.15 1</diffuse>
+          </material>
+        </visual>
+
+        <!-- Left ridge: vertical, fits between top and bottom ridges -->
+        <!-- Y: [-0.0025, 0.0025], Z: [0.8775, 1.8725] (length 0.995) -->
+        <collision name="ridge_left">
+          <pose>1.9975 0 1.375 0 0 0</pose>
+          <geometry><box><size>0.005 0.005 0.995</size></box></geometry>
+        </collision>
+        <visual name="ridge_left_vis">
+          <pose>1.9975 0 1.375 0 0 0</pose>
+          <geometry><box><size>0.005 0.005 0.995</size></box></geometry>
+          <material>
+            <ambient>0.6 0.1 0.1 1</ambient>
+            <diffuse>0.7 0.15 0.15 1</diffuse>
+          </material>
+        </visual>
+
+        <!-- Right ridge: vertical, fits between top and bottom ridges -->
+        <!-- Y: [0.9975, 1.0025], Z: [0.8775, 1.8725] (length 0.995) -->
+        <collision name="ridge_right">
+          <pose>1.9975 1 1.375 0 0 0</pose>
+          <geometry><box><size>0.005 0.005 0.995</size></box></geometry>
+        </collision>
+        <visual name="ridge_right_vis">
+          <pose>1.9975 1 1.375 0 0 0</pose>
+          <geometry><box><size>0.005 0.005 0.995</size></box></geometry>
+          <material>
+            <ambient>0.6 0.1 0.1 1</ambient>
+            <diffuse>0.7 0.15 0.15 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <include>
+      <uri>model://mrsim-tilthex-tactile</uri>
+      <name>hr6</name>
+      <pose>0 0 0.21 0 0 0</pose>
+    </include>
+
+    <plugin name="gz::sim::systems::Sensors" filename="gz-sim-sensors-system">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin name="gz::sim::systems::Contact" filename="gz-sim-contact-system"/>
+    <plugin name="optitrack" filename="optitrack-gazebo.so">
+      <hz>100</hz>
+      <port>1509</port>
+      <publish>
+        <link>hr6::base</link>
+        <name>HR_6</name>
+      </publish>
+    </plugin>
+  </world>
+</sdf>
