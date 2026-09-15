@@ -296,7 +296,7 @@ reactively -- no trajectory planning, purely local feedback at each timestep.
 To compare with the pretrained (250 epoch) model, change `model_dir` in the script to
 `.../learned_models/edge_2d/tap`.
 
-<video src="assets/servo_control_demo.mp4" width="600" controls></video>
+<video src="https://github.com/user-attachments/assets/084c75b0-ccc1-4199-8ce4-0634203cb4a7" width="600" controls></video>
 
 ---
 
@@ -476,7 +476,6 @@ Key label columns: `d_nearest_mm`, `signed_d_nearest_mm`, `nearest_ridge`,
 
 Sensor traverses the rectangular frame CW, collecting tactile images at each position.
 Overlay shows side label, corner flag, and distance to nearest ridge.
-[Full video (mp4)](assets/ridge_data_collection.mp4)
 
 ### How to run
 
@@ -651,7 +650,7 @@ python 10_servo_on_ridge.py              # GUI + video
 python 10_servo_on_ridge.py --no-video   # GUI only
 ```
 
-<video src="assets/ridge_servo_demo.mp4" width="600" controls></video>
+<video src="https://github.com/user-attachments/assets/4b21cdb6-ea2e-4405-bac9-a05e4be45e3d" width="600" controls></video>
 
 ---
 
