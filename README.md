@@ -6,9 +6,9 @@ sensor on its end-effector and autonomously follow geometric features (edges, ri
 using learned contact-pose estimation.
 
 This combines two research areas:
-- **Tactile servoing** -- a CNN estimates 6-DOF contact pose from tactile images, then a
+- **Tactile servoing:** a CNN estimates 6-DOF contact pose from tactile images, then a
   servo controller tracks a reference pose.
-- **Aerial physical interaction** -- a fully-actuated hexarotor with an L-shaped end-effector
+- **Aerial physical interaction:** a fully-actuated hexarotor with an L-shaped end-effector
   makes controlled contact with surfaces using admittance control and wrench estimation
 
 | Tactile image (no contact) | Tactile image (contact with edge) | CNN prediction vs ground truth |
@@ -23,7 +23,7 @@ sensing for aerial manipulation.
 
 The flight simulation stack --
 [TeleKyb3](https://github.com/lerema/telekyb3-genom3) (GenoM3 middleware, Gazebo
-plugins, `phynt-genom3`, and all control components) -- was developed by the
+plugins, `phynt-genom3`, and all control components) was developed by the
 LAAS-CNRS / INRIA team. We use it as-is inside a Docker image provided by the
 course. For full attribution to the TeleKyb3 developers and my earlier course
 assignments, see:
@@ -39,7 +39,7 @@ the TiltHex hexarotor and implemented admittance-controlled wall contact using
 
 The hexarotor flies an end-effector tip into a wall and traces a square pattern.
 An admittance filter + wrench observer (`phynt`) provides compliant contact.
-**What's missing:** no tactile sensing -- the drone knows it's pushing but cannot
+**What's missing:** no tactile sensing. The drone knows it's pushing but cannot
 feel *where* or *how* it contacts the surface.
 
 ---
@@ -60,19 +60,19 @@ The core idea, in one loop:
 ```
 
 1. A **TacTip optical sensor** has hundreds of pins on a soft membrane. When pressed against
-   a surface, pins deform -- a camera inside captures the deformation as an image.
+   a surface, pins deform and a camera inside captures the deformation as an image.
 2. A **NatureCNN** (trained on 5000 labelled examples) maps the image to a contact pose:
    where the edge is relative to the sensor (position in mm + angle in degrees).
 3. A **proportional controller** compares predicted pose to a desired reference and moves
    the robot to reduce the error.
-4. Repeat -- the robot reactively follows edges without any planned trajectory.
+4. Repeat. The robot reactively follows edges without any planned trajectory.
 
 ---
 
 ## Project Structure
 
 This repository contains all custom code, modified Gazebo files, and results.
-Three open-source dependencies are **not included** -- clone them into the project
+Three open-source dependencies are **not included**; clone them into the project
 directory (see [Dependencies](#dependencies-what-to-clone-and-why) below).
 
 ```
@@ -130,7 +130,7 @@ aerial-tactile-sim/
 ## Dependencies: What to Clone and Why
 
 These three repos form the tactile simulation stack. Each is an independent open-source
-project -- we use them as-is with minor compatibility fixes.
+project; we use them as-is with minor compatibility fixes.
 
 | Clone into | Source repo | What it does | We use it for |
 |---|---|---|---|
@@ -180,8 +180,8 @@ pip install networkx==3.2.1 pytorch_model_summary vit_pytorch imageio
 ### Phase 2+: Docker (Gazebo + TeleKyb3)
 
 The TeleKyb3 stack (GenoM3, Gazebo Ionic, all aerial control components) runs inside a
-Docker image provided by the course. Cannot be installed natively -- requires robotpkg,
-GenoM3 middleware, pocolibs, and 9+ custom components.
+Docker image provided by the course. Cannot be installed natively (requires robotpkg,
+GenoM3 middleware, pocolibs, and 9+ custom components).
 
 **Starting the Docker environment:**
 
@@ -241,7 +241,7 @@ cd ~/aerial-tactile-sim/scripts && python 01_test_tacto.py
 ```
 
 Renders a DIGIT sensor pressing a sphere at different depths. Demonstrates how tactile
-images change with penetration -- deeper contact = more pin deformation.
+images change with penetration (deeper contact = more pin deformation).
 
 | No contact | Light contact | Deep contact |
 |---|---|---|
@@ -291,7 +291,7 @@ python 04_test_retrained_servo.py
 
 Closes the loop: CNN prediction → error computation → robot movement → new image → repeat.
 PyBullet GUI shows sliders to change the reference pose. The sensor tracks the edge
-reactively -- no trajectory planning, purely local feedback at each timestep.
+reactively with no trajectory planning, purely local feedback at each timestep.
 
 To compare with the pretrained (250 epoch) model, change `model_dir` in the script to
 `.../learned_models/edge_2d/tap`.
@@ -326,7 +326,7 @@ python3 -i model_hexa_fa.py
 
 ### What was added for Phase 2
 
-The original setup has no tactile sensor -- `phynt` estimates a single net wrench from
+The original setup has no tactile sensor. `phynt` estimates a single net wrench from
 the dynamics model, with no spatial resolution. We added:
 
 **1. Contact sensor on the tip sphere** (`gazebo/models/mrsim-tilthex-tactile/model.sdf`):
@@ -373,7 +373,7 @@ For running the full drone simulation and results, see [Phase 3B](#phase-3b-velo
 
 ### Rectangular ridge frame on wall (Phase 3 preparation)
 
-Phase 2 used a flat wall -- the contact sensor works but every touch point looks
+Phase 2 used a flat wall where the contact sensor works but every touch point looks
 the same. For tactile edge following, the wall needs a **3D geometric feature**
 that the sensor can detect and the CNN can learn to localize.
 
@@ -406,9 +406,9 @@ Ridge cross-section (side view):
     ─────┘  └───── wall surface (x=2.0)
 ```
 
-**File:** `gazebo/worlds/hexa-fa-wall-tactile.world` -- `wall_frame` model with
+**File:** `gazebo/worlds/hexa-fa-wall-tactile.world` (`wall_frame` model with
 4 ridge collisions, positioned to match the EE tip trajectory (body y=[0,1],
-body z=[1.0,2.0], EE z offset = -0.125m).
+body z=[1.0,2.0], EE z offset = -0.125m)).
 
 ---
 
@@ -452,7 +452,7 @@ angles) is randomized at each point. The DataLoader shuffles during CNN training
 | Corner (~30%) | L-shaped pattern (two ridges) | Sensor within 18.5mm of a corner (dome radius + ridge half-width) |
 
 All 4 sides sampled equally (~25% each). All 4 corner orientations (0/90/180/270)
-appear naturally -- no rotation augmentation needed for corner generalization.
+appear naturally, so no rotation augmentation is needed for corner generalization.
 
 Each sample varies: cross-ridge offset (+-14mm), depth (-2 to 5.5mm),
 roll/pitch (+-15 deg), yaw (+-20 deg).
@@ -566,52 +566,6 @@ Example: sensor detects horizontal ridge 3mm to the left, 0.5mm too deep, 4° ro
 Controller outputs: move right 3mm, retract 0.5mm, rotate -4°. Next frame re-estimates,
 loop converges to desired tracking pose.
 
-### Key finding: camera–workframe 90° rotation
-
-The workframe orientation includes a π/2 z-rotation (`workframe_rpy = [-π, 0, π/2]`),
-so the tactile image appears rotated 90° relative to workframe coordinates:
-
-```
-Workframe ridge: horizontal (0°)    →  Tactile image: vertical bright band
-Workframe ridge: vertical (90°)     →  Tactile image: horizontal bright band
-```
-
-All classical methods (Hough, Radon, Sobel gradient) initially had inverted
-orientation predictions because they measured band direction in image coordinates,
-which is 90° offset from the workframe label. Adding a +90° correction gave
-100% orientation accuracy on straight ridge sections. The CNN learns this mapping
-implicitly from the labels.
-
-### CNN approach (NatureCNN / ResNet)
-
-Task `ridge_4d`: image → (signed_d, depth, orient, yaw) with sin/cos encoding
-for angles. Trained on 4000 samples (80/20 split), validated on 1001 samples.
-Accuracy tolerances: 2.0mm position, 3.5° rotation (relaxed from original 0.25mm/1.0°
-for the aerial scenario where drone vibration limits precision).
-
-Ground-truth labels use **finite-segment distances** to each ridge (not infinite-line
-perpendicular distances). This ensures correct nearest-ridge assignment at corner zones
-where the sensor is past a ridge endpoint — without this fix, the CNN learned wrong
-orientation labels at two of the four corners.
-
-- **NatureCNN** (5M params): best depth (0.08mm) and orient (99.0%), used for servo
-- **ResNet** (11M params): slightly better distance (4.23mm), but overfits on small
-  dataset — depth 3x worse (0.30mm)
-
-### Classical approach (Radon)
-
-No training data needed. Per-image pipeline (~1ms on CPU):
-
-1. **Background subtraction:** Gaussian blur (σ=15) estimates dome gradient, subtract
-2. **Orientation:** Sobel gradient energy : `Σ(gx²)` vs `Σ(gy²)` determines ridge
-   direction via the camera–workframe 90° rotation mapping
-3. **Distance:** Single-angle Radon projection at detected orientation, column-sum
-   peak gives offset from image center
-
-100% orientation accuracy on straight sections, 68% on corners (where both ridges
-are visible). Distance: 1.55mm MAE — the projection peak directly encodes the
-physical offset through the TacTip optics.
-
 ### How to run
 
 ```bash
@@ -702,7 +656,6 @@ or `None` when no contact. When CNN replaces this, servo code stays unchanged.
   transients from sudden direction change)
 - **Recovery scan:** when ridge lost for 8+ steps, return to last known position
   and scan ±180mm in cross-track direction
-- **e_limits resync:** on planner failure, `set_current_state()` + goto to resync
 
 ### How to run
 
@@ -793,19 +746,8 @@ dome detection range (5mm). Root cause fix in progress.
 
 1. Eliminate contact loss with the geometric sensor (root cause fix)
 2. Complete full rectangle traversal (4 corners, 4 ridges)
-3. Test phynt wrench injection API → enable wrench-based depth servo
-4. Integrate PyBullet/TACTO for realistic tactile image rendering (Phase 3C)
-5. Train CNN on TACTO data → replace geometric sensor (drop-in, same output format)
-
-### Files
-
-| File | Purpose |
-|---|---|
-| `src/07-aerial-tactile/tactile_servo_bridge.py` | Tactile servo bridge (drone) |
-| `src/07-aerial-tactile/model_hexa_fa_tactile.py` | Contact sensing flight (pre-planned pattern) |
-| `src/07-aerial-tactile/simulation.sh` | Gazebo + GenoM3 launcher |
-| `src/07-aerial-tactile/plot_servo.py` | Servo run visualization |
-| `scripts/10_servo_on_ridge.py` | PyBullet validation (same servo algorithm) |
+3. Integrate PyBullet/TACTO for realistic tactile image rendering (Phase 3C)
+4. Train CNN on TACTO data, replace geometric sensor (drop-in, same output format)
 
 ---
 
@@ -815,5 +757,5 @@ dome detection range (5mm). Root cause fix in progress.
 |---|---|
 | GPU | NVIDIA GeForce RTX 4060 Laptop (CUDA) |
 | Local env | Conda `tactile`, Python 3.9, PyTorch 2.6.0+cu124 |
-| Docker | `art/tk3lab:ionic-0.2` (14.3GB) -- Gazebo Ionic + TeleKyb3 |
+| Docker | `art/tk3lab:ionic-0.2` (14.3GB), Gazebo Ionic + TeleKyb3 |
 | OS | Ubuntu 24.04, Linux 6.17 |
