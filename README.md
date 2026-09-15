@@ -437,7 +437,7 @@ closed rectangle with 4 corners:
           wf_y=-60              wf_y=+60
 ```
 
-This matches the actual Gazebo drone scenario — a rectangular ridge frame on the
+This matches the actual Gazebo drone scenario: a rectangular ridge frame on the
 wall that the hexarotor traces with its end-effector.
 
 ### Sequential perimeter sampling
@@ -515,7 +515,7 @@ The `collection_params.json` stores the pose limits used for normalization.
 
 ---
 
-## Phase 4: Ridge Perception — CNN + Classical (completed)
+## Phase 4: Ridge Perception, CNN + Classical (completed)
 
 Three approaches evaluated on the same val set (1001 samples) for estimating
 sensor-ridge relative pose from tactile images:
@@ -585,13 +585,13 @@ python 08_hough_ridge_detect.py --image path/to/img.png      # single image
 python 09_evaluate_comparison.py
 ```
 
-### PyBullet Validation — CNN-Based Servo
+### PyBullet Validation: CNN-Based Servo
 
 Before deploying on the drone, the trained CNN replaces the geometric placeholder
 sensor in a closed-loop servo test. `10_servo_on_ridge.py` runs the ridge_4d
 NatureCNN + ServoController + CornerDetector on the rectangular ridge frame
 stimulus. The CNN predicts signed distance, orientation, depth, and yaw from
-each tactile image — no geometric prior or position-based heuristics.
+each tactile image, with no geometric prior or position-based heuristics.
 
 Full rectangle traversal (4 ridges, 4 corners) completes in ~920 steps at
 10mm/s forward speed. Tracking accuracy: ~0.5mm on straight sections, ~3mm
@@ -726,7 +726,7 @@ geometry.
 
 Best result: bottom ridge tracked with cross-track error converging, 2 corners
 detected (bottom→left, left→top). Full rectangle traversal not yet completed.
-Intermittent contact loss during velocity transitions — EE oscillates in/out of
+Intermittent contact loss during velocity transitions. EE oscillates in/out of
 dome detection range (5mm). Root cause fix in progress.
 
 **EE trajectory from latest servo run:**
@@ -740,7 +740,7 @@ dome detection range (5mm). Root cause fix in progress.
 - Intermittent contact loss during velocity transitions
 - Balancing contact force vs pitch coupling: higher CONTACT_BODY_X = more reliable
   contact but more pitch disturbance
-- Geometric sensor approximates CNN behavior — real deployment needs TACTO + CNN
+- Geometric sensor approximates CNN behavior; real deployment needs TACTO + CNN
 
 ### Next Steps
 
