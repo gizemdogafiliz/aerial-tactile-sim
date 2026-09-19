@@ -1,11 +1,12 @@
 """
-Phase 3B validation: Velocity-based tactile servo on PyBullet ridge frame.
+Phase 3B validation: CNN-based tactile servo on PyBullet ridge frame.
 
-Same algorithm as the drone's tactile_servo_bridge.py:
-  GeometricTactileSensor → ServoController (v = -λ·e) → CornerDetector
+Uses the trained ridge_4d CNN for perception + drone's servo logic from
+tactile_servo_bridge.py for control:
+  CNN (ridge_4d) → ServoController (v = -λ·e) → CornerDetector
 
-Demonstrates the servo logic works on the rectangular ridge frame
-before deploying it on the aerial platform with TeleKyb3.
+Demonstrates the full pipeline (CNN + servo) working on the rectangular
+ridge frame before deploying on the aerial platform with TeleKyb3.
 
 Usage:
   conda activate tactile
@@ -17,9 +18,17 @@ import os
 import sys
 import argparse
 import numpy as np
+import torch
 import imageio
 
 sys.path.insert(0, os.path.expanduser('~/aerial-tactile-sim/servo_control'))
+
+from torch.autograd import Variable
+from tactile_gym.utils.general_utils import load_json_obj
+from tactile_gym_servo_control.learning.learning_utils import import_task, POSE_LABEL_NAMES
+from tactile_gym_servo_control.learning.networks import create_model
+from tactile_gym_servo_control.utils.image_transforms import process_image
+from tactile_gym_servo_control.learning.learning_utils import decode_pose
 from tactile_gym_servo_control.utils.pybullet_utils import setup_pybullet_env
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -27,94 +36,126 @@ PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 STIMULI_DIR = os.path.join(PROJECT_DIR, 'servo_control',
                            'tactile_gym_servo_control', 'stimuli')
 
-# Ridge frame geometry (workframe coords, mm)
-FRAME_HALF = 60.0   # 120x120mm frame → ridges at ±60mm
-RIDGE_W = 5.0       # ridge cross-section width
-DOME_R = 16.0        # TacTip dome radius
-RIDGES_WF = [
-    {'name': 'left',   'orient': 0,  'axis': 'y', 'coord': -FRAME_HALF,
-     'span_axis': 'x', 'span': (-FRAME_HALF, FRAME_HALF)},
-    {'name': 'right',  'orient': 0,  'axis': 'y', 'coord':  FRAME_HALF,
-     'span_axis': 'x', 'span': (-FRAME_HALF, FRAME_HALF)},
-    {'name': 'bottom', 'orient': 90, 'axis': 'x', 'coord': -FRAME_HALF,
-     'span_axis': 'y', 'span': (-FRAME_HALF, FRAME_HALF)},
-    {'name': 'top',    'orient': 90, 'axis': 'x', 'coord':  FRAME_HALF,
-     'span_axis': 'y', 'span': (-FRAME_HALF, FRAME_HALF)},
-]
+MODEL_DIR = os.path.join(PROJECT_DIR, 'servo_control',
+                         'tactile_gym_servo_control', 'learned_models',
+                         'ridge_4d', 'nature_cnn')
 
 # Servo parameters (same as drone bridge)
-SERVO_LAMBDA = 0.15
+SERVO_LAMBDA = 0.25
 MAX_SERVO_VEL = 0.02       # m/s
-FORWARD_SPEED = 0.035      # m/s along ridge
+FORWARD_SPEED = 0.020      # m/s along ridge
 DT = 0.05                  # position increment timestep (s)
 CONTACT_DEPTH = 0.004      # 4mm contact depth (wf_z)
 
-# Corner detection (same as drone bridge)
+# Corner detection (tuned for CNN noise — orient smoothing protects against false positives)
 CORNER_ORIENT_THRESHOLD = 2
-CORNER_COOLDOWN = 5
-MIN_CORNER_STEPS = 15
+CORNER_COOLDOWN = 8
+MIN_CORNER_STEPS = 20
 
 # Rectangle traversal: same turn table as drone
-# wf coords: x-forward along ridge, y is cross-track for orient=0
 TURN_AT_CORNER = {
-    (+1, 0): (0, +1),   # right along x → up along y
-    (0, +1): (-1, 0),   # up along y → left along x
-    (-1, 0): (0, -1),   # left along x → down along y
-    (0, -1): (+1, 0),   # down along y → right along x
+    (+1, 0): (0, +1),
+    (0, +1): (-1, 0),
+    (-1, 0): (0, -1),
+    (0, -1): (+1, 0),
 }
 
+# CNN signed_d convention: positive = inside frame.
+# Cross-track correction sign depends on which ridge we're on.
+SERVO_SIGN = {
+    (+1, 0): -1,   # left ridge: push toward -y
+    (0, +1): +1,   # top ridge: push toward +x
+    (-1, 0): +1,   # right ridge: push toward +y
+    (0, -1): -1,   # bottom ridge: push toward -x
+}
 
-class GeometricTactileSensor:
-    """Same interface as drone's sensor, adapted for PyBullet workframe coords."""
+# Ridge frame geometry (workframe coords, mm)
+FRAME_HALF = 60.0
 
-    def __init__(self, ridges, noise_std=0.0):
-        self.ridges = ridges
-        self.noise_std = noise_std
 
-    def sense(self, wf_x_mm, wf_y_mm, wf_z_mm):
-        best = None
-        best_dist = float('inf')
 
-        for ridge in self.ridges:
-            if ridge['axis'] == 'y':
-                perp_dist = wf_y_mm - ridge['coord']
-                along_val = wf_x_mm
-            else:
-                perp_dist = wf_x_mm - ridge['coord']
-                along_val = wf_y_mm
+class CNNTactileSensor:
+    """Wraps the trained ridge_4d CNN for real-time inference."""
 
-            span_lo, span_hi = ridge['span']
-            if along_val < span_lo - 5 or along_val > span_hi + 5:
-                continue
+    def __init__(self, model_dir, device='cpu'):
+        self.device = device
 
-            if abs(perp_dist) < best_dist:
-                best_dist = abs(perp_dist)
-                best = {
-                    'signed_d_mm': perp_dist,
-                    'depth_mm': wf_z_mm,
-                    'orient': ridge['orient'],
-                    'ridge_name': ridge['name'],
-                    'along_val': along_val,
-                }
+        task = 'ridge_4d'
+        self.out_dim, self.label_names = import_task(task)
 
-        if best is None or best_dist > DOME_R:
-            return None
+        self.pose_limits_dict = load_json_obj(os.path.join(model_dir, 'pose_limits'))
+        self.pose_limits = [self.pose_limits_dict['pose_llims'],
+                            self.pose_limits_dict['pose_ulims']]
+        model_params = load_json_obj(os.path.join(model_dir, 'model_params'))
+        self.image_processing_params = load_json_obj(
+            os.path.join(model_dir, 'image_processing_params'))
 
-        if self.noise_std > 0:
-            best['signed_d_mm'] += np.random.normal(0, self.noise_std)
+        self.model = create_model(
+            self.image_processing_params['dims'],
+            self.out_dim,
+            model_params,
+            saved_model_dir=model_dir,
+            device=device
+        )
+        self.model.eval()
+        self._orient_history = []
+        self._smooth_window = 2
+        print(f"CNN loaded from {model_dir}")
 
-        return best
+    def predict(self, tactile_image):
+        """Run CNN inference on a tactile image.
+
+        Returns dict with signed_d_mm, depth_mm, orient_deg, yaw_deg
+        or None if prediction is out of range.
+        """
+        processed = process_image(
+            tactile_image,
+            gray=False,
+            bbox=self.image_processing_params['bbox'],
+            dims=self.image_processing_params['dims'],
+            stdiz=self.image_processing_params['stdiz'],
+            normlz=self.image_processing_params['normlz'],
+            thresh=self.image_processing_params['thresh'],
+        )
+
+        processed = np.rollaxis(processed, 2, 0)
+        processed = processed[np.newaxis, ...]
+
+        with torch.no_grad():
+            model_input = torch.from_numpy(processed).float().to(self.device)
+            raw_output = self.model(model_input)
+
+        predictions = decode_pose(raw_output, self.label_names, self.pose_limits)
+
+        # y → signed_d_mm, z → depth_mm, Rx → orient_deg, Rz → yaw_deg
+        signed_d_mm = predictions['y'].item()
+        depth_mm = predictions['z'].item()
+        orient_deg = predictions['Rx'].item()
+        yaw_deg = predictions['Rz'].item()
+
+        # Snap orient to 0 or 90 (CNN outputs continuous value)
+        orient_snap = 90.0 if abs(orient_deg - 90) < abs(orient_deg - 0) else 0.0
+
+        return {
+            'signed_d_mm': signed_d_mm,
+            'depth_mm': depth_mm,
+            'orient': orient_snap,
+            'orient_raw': orient_deg,
+            'yaw_deg': yaw_deg,
+        }
 
 
 class ServoController:
     """v = -λ·e — same as drone bridge."""
 
-    def compute(self, pred):
+    def compute(self, pred, forward):
         e_m = pred['signed_d_mm'] * 0.001
-        v = np.clip(-SERVO_LAMBDA * e_m, -MAX_SERVO_VEL, MAX_SERVO_VEL)
-        # Cross-track correction perpendicular to ridge
-        vx = v if pred['orient'] == 90 else 0.0
-        vy = v if pred['orient'] == 0 else 0.0
+        sign = SERVO_SIGN.get(forward, -1)
+        v = np.clip(sign * SERVO_LAMBDA * e_m, -MAX_SERVO_VEL, MAX_SERVO_VEL)
+        # CNN convention: orient=90 → left/right ridge (wf_y=±60) → cross-track is y
+        #                 orient=0  → bottom/top ridge (wf_x=±60) → cross-track is x
+        vx = v if pred['orient'] == 0 else 0.0
+        vy = v if pred['orient'] == 90 else 0.0
         return vx, vy
 
 
@@ -131,7 +172,8 @@ class CornerDetector:
 
     def _orient_for_forward(self):
         dx, dy = self.forward
-        return 0 if dx != 0 else 90
+        # CNN convention: moving along x = on left/right ridge = orient 90
+        return 90 if dx != 0 else 0
 
     def is_expected(self, orient):
         return orient == self.expected_orient
@@ -171,8 +213,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--no-video', action='store_true')
     parser.add_argument('--steps', type=int, default=800)
-    parser.add_argument('--noise', type=float, default=0.0, help='Sensor noise std (mm)')
+    parser.add_argument('--model-dir', default=MODEL_DIR,
+                        help='Path to trained ridge_4d model')
     args = parser.parse_args()
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # Setup PyBullet with ridge frame
     stim_path = os.path.join(STIMULI_DIR, 'wall_ridge', 'wall_ridge_frame.urdf')
@@ -196,11 +241,12 @@ def main():
     start_x, start_y = -0.040, -0.058
     embodiment.move_linear([start_x, start_y, CONTACT_DEPTH], [0, 0, 0], quick_mode=False)
 
-    sensor = GeometricTactileSensor(RIDGES_WF, noise_std=args.noise)
+    # Load CNN
+    cnn_sensor = CNNTactileSensor(args.model_dir, device=device)
     servo = ServoController()
-    corner_det = CornerDetector(init_forward=(+1, 0))  # start going right along x
+    corner_det = CornerDetector(init_forward=(+1, 0))
 
-    print(f"\nPhase 3B validation: servo on ridge frame")
+    print(f"\nPhase 3B validation: CNN servo on ridge frame")
     print(f"  lambda={SERVO_LAMBDA}, fwd={FORWARD_SPEED*1000:.0f}mm/s")
     print(f"  Start: wf=({start_x*1000:.0f}, {start_y*1000:.0f})mm")
     print(f"  Press 'q' to quit\n")
@@ -212,16 +258,19 @@ def main():
     for step in range(args.steps):
         wf_x_mm = pos[0] * 1000
         wf_y_mm = pos[1] * 1000
-        wf_z_mm = pos[2] * 1000
 
-        pred = sensor.sense(wf_x_mm, wf_y_mm, wf_z_mm)
+        # Get tactile image from TacTip sensor
+        tactile_image = embodiment.get_tactile_observation()
+
+        # CNN prediction
+        pred = cnn_sensor.predict(tactile_image)
 
         vx_servo, vy_servo = 0.0, 0.0
 
         if pred is not None:
             corner_det.update(pred['orient'])
             if corner_det.is_expected(pred['orient']):
-                vx_servo, vy_servo = servo.compute(pred)
+                vx_servo, vy_servo = servo.compute(pred, corner_det.forward)
 
         fwd_vx, fwd_vy = corner_det.get_forward_velocity()
         vx_total = vx_servo + fwd_vx
@@ -233,20 +282,16 @@ def main():
         embodiment.move_linear(pos.copy(), [0, 0, 0], quick_mode=True)
 
         if step % 30 == 0:
-            if pred:
-                print(f"  [{step:3d}/{args.steps}] "
-                      f"wf=({wf_x_mm:+6.1f}, {wf_y_mm:+6.1f})mm  "
-                      f"ridge={pred['ridge_name']:6s}  "
-                      f"d={pred['signed_d_mm']:+5.1f}mm  "
-                      f"fwd={corner_det.forward}  "
-                      f"corners={corner_det.corner_count}")
-            else:
-                print(f"  [{step:3d}/{args.steps}] "
-                      f"wf=({wf_x_mm:+6.1f}, {wf_y_mm:+6.1f})mm  NO RIDGE")
+            print(f"  [{step:3d}/{args.steps}] "
+                  f"wf=({wf_x_mm:+6.1f}, {wf_y_mm:+6.1f})mm  "
+                  f"d={pred['signed_d_mm']:+5.1f}mm  "
+                  f"orient={pred['orient_raw']:+5.1f}→{pred['orient']:.0f}°  "
+                  f"fwd={corner_det.forward}  "
+                  f"corners={corner_det.corner_count}")
 
         log.append([step, wf_x_mm, wf_y_mm,
-                    pred['signed_d_mm'] if pred else np.nan,
-                    pred['orient'] if pred else np.nan,
+                    pred['signed_d_mm'],
+                    pred['orient'],
                     corner_det.corner_count])
 
         if not args.no_video:

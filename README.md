@@ -535,12 +535,14 @@ sensor-ridge relative pose from tactile images:
 |---|---|---|---|---|---|
 | NatureCNN (200ep) | 4.07 mm | **0.08 mm** | **99.0%** | 2.01° | 72.8 ms |
 | ResNet (100ep) | 4.23 mm | 0.30 mm | 94.7% | 2.83° | -- |
-| Radon (classical) | **1.55 mm** | -- | 97.1% | -- | **0.95 ms** |
-| **Hybrid (Radon+CNN)** | **1.55 mm** | **0.08 mm** | 97.1% | 2.01° | ~2 ms |
+| Radon (classical) | 1.55 mm | -- | 97.1% | -- | **0.95 ms** |
+| **Hybrid (CNN orient + Radon dist)** | **1.47 mm** | **0.08 mm** | **99.0%** | 2.01° | ~2 ms |
 
-The hybrid takes each output from the best method: Radon for distance (2.6x better
-than CNN), NatureCNN for depth and yaw (CNN-only capabilities). The CNN-only approach
-is used for the servo demo since it requires no classical preprocessing pipeline.
+The hybrid feeds CNN orientation (99.0%) into Radon's single-angle projection for
+distance estimation (1.47mm), taking depth and yaw from the CNN. This outperforms
+both Radon-only distance (1.55mm) and Radon-only orient (97.1%) by using each
+method where it is strongest. The CNN-only approach is used for the servo demo
+since it requires no classical preprocessing pipeline.
 
 | Training curves (loss + accuracy) | Predicted vs target |
 |---|---|
@@ -593,8 +595,8 @@ NatureCNN + ServoController + CornerDetector on the rectangular ridge frame
 stimulus. The CNN predicts signed distance, orientation, depth, and yaw from
 each tactile image, with no geometric prior or position-based heuristics.
 
-Full rectangle traversal (4 ridges, 4 corners) completes in ~920 steps at
-10mm/s forward speed. Tracking accuracy: ~0.5mm on straight sections, ~3mm
+Full rectangle traversal (4 ridges, 4 corners) completes in ~465 steps at
+20mm/s forward speed. Tracking accuracy: ~0.5mm on straight sections, ~3mm
 offset after corner transitions.
 
 ```bash
@@ -604,7 +606,7 @@ python 10_servo_on_ridge.py              # GUI + video
 python 10_servo_on_ridge.py --no-video   # GUI only
 ```
 
-<video src="https://github.com/user-attachments/assets/4b21cdb6-ea2e-4405-bac9-a05e4be45e3d" width="600" controls></video>
+<video src="https://github.com/user-attachments/assets/6084fdbd-eca7-4fcd-ab22-24ce64322e31" width="600" controls></video>
 
 ---
 
