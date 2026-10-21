@@ -6,8 +6,8 @@ sensor on its end-effector and autonomously follow geometric features (edges, ri
 using learned contact-pose estimation.
 
 This combines two research areas:
-- **Tactile servoing:** a CNN estimates 6-DOF contact pose from tactile images, then a
-  servo controller tracks a reference pose.
+- **Tactile servoing:** a CNN estimates contact pose (4 DOF: distance, depth, orient, yaw)
+  from tactile images, then a servo controller tracks a reference pose.
 - **Aerial physical interaction:** a fully-actuated hexarotor with an L-shaped end-effector
   makes controlled contact with surfaces using admittance control and wrench estimation
 
@@ -297,8 +297,8 @@ label. Each sample produces an `(image, pose)` pair saved to CSV + PNG.
 python 02_train_edge2d.py
 ```
 
-Trains a NatureCNN on 5000 pre-collected tactile images (included in the servo_control
-repo). The network learns: *"given this pin deformation pattern, the edge is at position
+Trains a NatureCNN on 5000 pre-collected tactile images (from the servo_control
+repo, see [Dependencies](#dependencies-what-to-clone-and-why)). The network learns: *"given this pin deformation pattern, the edge is at position
 y and angle Rz relative to my sensor."*
 
 - **Architecture:** NatureCNN (3 conv layers: 32→64→64, 2 FC layers: 512→512, output: 3)
