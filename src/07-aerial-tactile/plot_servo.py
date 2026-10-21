@@ -25,7 +25,10 @@ import argparse
 import glob
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-LOG_DIR = os.path.expanduser('~/tk3lab-ws/logs/07-aerial-tactile-servo')
+PROJECT_DIR = os.path.dirname(os.path.dirname(SCRIPT_DIR))
+LOG_DIR_TK3 = os.path.expanduser('~/tk3lab-ws/logs/07-aerial-tactile-servo')
+LOG_DIR_REPO = os.path.join(PROJECT_DIR, 'output', 'aerial_servo_logs')
+LOG_DIR = LOG_DIR_TK3 if os.path.isdir(LOG_DIR_TK3) else LOG_DIR_REPO
 
 RAD2DEG = 180.0 / math.pi
 X_WALL = 2.0
@@ -156,8 +159,14 @@ def main():
     print("\nLoading TK3 component logs...")
     tk3 = load_tk3_logs(log_dir)
 
-    # Parse pom for full flight trajectory
+    # Parse pom for full flight trajectory (try pom.log first, then pom.npz)
     pom = tk3.get('pom')
+    if pom is None:
+        pom_npz_path = os.path.join(log_dir, 'pom.npz')
+        if os.path.exists(pom_npz_path):
+            pom_data = np.load(pom_npz_path)
+            pom = {k: pom_data[k] for k in pom_data.files}
+            print(f"  Loaded pom.npz ({len(pom['ts'])} samples)")
     has_pom = pom is not None and 'ts' in pom
     if has_pom:
         t0_pom = pom['ts'][0]

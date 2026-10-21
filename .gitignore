@@ -1,0 +1,30 @@
+# External dependencies — clone manually (see README)
+tacto/
+tactile_gym_2/
+servo_control/
+
+# Large logs
+pom.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,139 @@
+<?xml version="1.0" ?>
+<robot name="wall_ridge_frame.urdf">
+
+  <!-- Flat wall surface (180mm plate) -->
+  <link name="wall">
+    <contact>
+      <friction_anchor/>
+      <lateral_friction value="1.0"/>
+    </contact>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="1.0"/>
+      <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.18 0.18 0.025"/>
+      </geometry>
+      <material name="wall_gray">
+        <color rgba="0.7 0.7 0.8 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.18 0.18 0.025"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- 120x120mm rectangular ridge frame, centered on wall.
+       4 ridges (5mm wide, 5mm tall) at +-60mm from center.
+       Matches Gazebo scenario: 5mm protrusion, 5mm cross-section.
+       Ridges overlap at corners (PyBullet merges static collisions). -->
+
+  <!-- Bottom ridge: along URDF x, at y=-60mm -->
+  <link name="ridge_bottom">
+    <contact><friction_anchor/><lateral_friction value="1.0"/></contact>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0.01"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry><box size="0.125 0.005 0.005"/></geometry>
+      <material name="ridge_red"><color rgba="0.7 0.15 0.15 1"/></material>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry><box size="0.125 0.005 0.005"/></geometry>
+    </collision>
+  </link>
+
+  <!-- Top ridge: along URDF x, at y=+60mm -->
+  <link name="ridge_top">
+    <contact><friction_anchor/><lateral_friction value="1.0"/></contact>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0.01"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry><box size="0.125 0.005 0.005"/></geometry>
+      <material name="ridge_red"><color rgba="0.7 0.15 0.15 1"/></material>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry><box size="0.125 0.005 0.005"/></geometry>
+    </collision>
+  </link>
+
+  <!-- Left ridge: along URDF y, at x=-60mm -->
+  <link name="ridge_left">
+    <contact><friction_anchor/><lateral_friction value="1.0"/></contact>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0.01"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry><box size="0.005 0.125 0.005"/></geometry>
+      <material name="ridge_red"><color rgba="0.7 0.15 0.15 1"/></material>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry><box size="0.005 0.125 0.005"/></geometry>
+    </collision>
+  </link>
+
+  <!-- Right ridge: along URDF y, at x=+60mm -->
+  <link name="ridge_right">
+    <contact><friction_anchor/><lateral_friction value="1.0"/></contact>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0.01"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry><box size="0.005 0.125 0.005"/></geometry>
+      <material name="ridge_red"><color rgba="0.7 0.15 0.15 1"/></material>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry><box size="0.005 0.125 0.005"/></geometry>
+    </collision>
+  </link>
+
+  <!-- All ridges on top of wall. Wall top z=0.0125, ridge center z=0.015. -->
+
+  <joint name="ridge_bottom_joint" type="fixed">
+    <origin xyz="0 -0.06 0.015" rpy="0 0 0"/>
+    <parent link="wall"/>
+    <child link="ridge_bottom"/>
+  </joint>
+
+  <joint name="ridge_top_joint" type="fixed">
+    <origin xyz="0 0.06 0.015" rpy="0 0 0"/>
+    <parent link="wall"/>
+    <child link="ridge_top"/>
+  </joint>
+
+  <joint name="ridge_left_joint" type="fixed">
+    <origin xyz="-0.06 0 0.015" rpy="0 0 0"/>
+    <parent link="wall"/>
+    <child link="ridge_left"/>
+  </joint>
+
+  <joint name="ridge_right_joint" type="fixed">
+    <origin xyz="0.06 0 0.015" rpy="0 0 0"/>
+    <parent link="wall"/>
+    <child link="ridge_right"/>
+  </joint>
+
+</robot>

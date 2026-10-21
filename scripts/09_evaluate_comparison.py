@@ -385,6 +385,41 @@ def main():
     plt.savefig(os.path.join(OUTPUT_DIR, 'comparison_orient.png'), dpi=150)
     print(f"  Orientation plots saved: output/evaluation/comparison_orient.png")
 
+    # --- Save raw predictions as CSV ---
+    val_dir = os.path.join(DATA_DIR, 'val')
+    targets = pd.read_csv(os.path.join(val_dir, 'targets.csv'))
+    n = len(ncnn_gt['y'])
+
+    raw = pd.DataFrame({
+        'image': targets['sensor_image'].values[:n],
+        'gt_y': ncnn_gt['y'],
+        'gt_z': ncnn_gt['z'],
+        'gt_Rx': ncnn_gt['Rx'],
+        'gt_Rz': ncnn_gt['Rz'],
+        'ncnn_y': ncnn_pred['y'],
+        'ncnn_z': ncnn_pred['z'],
+        'ncnn_Rx': ncnn_pred['Rx'],
+        'ncnn_Rz': ncnn_pred['Rz'],
+        'radon_abs_dist': radon_pred['abs_distance'],
+        'radon_orient': radon_pred['orient'],
+    })
+    if res_pred is not None:
+        raw['resnet_y'] = res_pred['y']
+        raw['resnet_z'] = res_pred['z']
+        raw['resnet_Rx'] = res_pred['Rx']
+        raw['resnet_Rz'] = res_pred['Rz']
+
+    raw_path = os.path.join(OUTPUT_DIR, 'raw_predictions.csv')
+    raw.to_csv(raw_path, index=False)
+    print(f"  Raw predictions saved: {raw_path}")
+
+    # Save summary metrics as JSON
+    import json
+    metrics_path = os.path.join(OUTPUT_DIR, 'metrics_summary.json')
+    with open(metrics_path, 'w') as f:
+        json.dump(results, f, indent=2, default=str)
+    print(f"  Metrics summary saved: {metrics_path}")
+
     print(f"\n  Done!")
 
 

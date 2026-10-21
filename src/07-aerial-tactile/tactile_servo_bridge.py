@@ -70,9 +70,11 @@ RIDGES = [
 GOTO_DURATION = 1.5         # for Phase 0/1/3 positioning (not servo)
 VEL_DURATION = 2.0          # velocity command duration (overlaps next step)
 STEP_SLEEP = 1.0            # sensor loop rate (~1 Hz, was 1.7 with goto)
-FORWARD_SPEED = 0.035       # m/s along ridge
-SERVO_LAMBDA = 0.15         # convergence rate (1/s)
+FORWARD_SPEED = 0.020       # m/s along ridge (was 0.035 — too fast for 1Hz loop)
+SERVO_LAMBDA = 0.35         # convergence rate (1/s) (was 0.15 — too slow to converge)
 MAX_SERVO_VEL = 0.02        # max cross-track velocity (m/s, safety clamp)
+D_TARGET = 0.010            # 10mm — stay on whichever side (sign applied in compute)
+DEAD_ZONE = 0.003           # 3mm dead zone around d_target
 DEPTH_VEL_K = 0.5           # depth velocity gain: vx = -K * depth_error
 MAX_DEPTH_VEL = 0.005       # max depth velocity (m/s)
 LOW_DEPTH_THRESHOLD = 0.001 # 1mm — stop servo corrections (forward continues)
@@ -177,7 +179,11 @@ class ServoController:
     Returns velocity (m/s) — fed directly to maneuver.velocity()."""
 
     def compute(self, pred):
-        e = pred['signed_d_m']
+        d = pred['signed_d_m']
+        sign = 1.0 if d >= 0 else -1.0
+        e = d - sign * D_TARGET
+        if abs(e) < DEAD_ZONE:
+            return 0.0, 0.0
         v = np.clip(-SERVO_LAMBDA * e, -MAX_SERVO_VEL, MAX_SERVO_VEL)
         vy = v if pred['orient'] == 90 else 0.0
         vz = v if pred['orient'] == 0 else 0.0
@@ -317,6 +323,18 @@ class CornerDetector:
             return True
 
         return False
+
+    def force_corner(self, new_orient):
+        """Force a corner transition — called when recovery finds unexpected orient."""
+        old_forward = self.forward
+        self.forward = TURN_AT_CORNER.get(self.forward, self.forward)
+        self.expected_orient = self._orient_for_forward()
+        self.change_count = 0
+        self.corner_count += 1
+        self.cooldown = CORNER_COOLDOWN
+        self.steps_since_corner = 0
+        print(f"  CORNER #{self.corner_count}: {old_forward}→{self.forward} "
+              f"(expect orient={self.expected_orient})")
 
     def get_forward_velocity(self):
         return (self.forward[0] * FORWARD_SPEED,
@@ -645,17 +663,19 @@ def simulation(sensor_mode='geometric', noise_std=0.0005, max_servo_time=700.0, 
             time.sleep(0.3)
             scan_z = pos[2]
             scan_y = pos[1]
-            scan_x = CONTACT_BODY_X
+            scan_x = pos[0]  # use actual body x, not CONTACT_BODY_X
             for i in range(30):
                 scan_z += 0.012
                 if not sensor.in_contact(ee[0]):
-                    scan_x += 0.01
+                    scan_x = min(scan_x + 0.01, CONTACT_BODY_X + 0.05)
                     print(f"  scan #{i}: no contact → push x={scan_x:.2f}")
                 try:
                     maneuver.goto(scan_x, scan_y, scan_z, 0,
                                   GOTO_DURATION)
                 except Exception as exc:
                     print(f"  scan #{i}: goto fail ({exc})")
+                    maneuver.set_current_state()
+                    time.sleep(0.3)
                     continue
                 time.sleep(STEP_SLEEP)
                 pos, att = read_state()
@@ -748,18 +768,125 @@ def simulation(sensor_mode='geometric', noise_std=0.0005, max_servo_time=700.0, 
                 no_ridge_count = 0
                 last_ridge_body_pos = pos.copy()
                 if corner_det.update(pred['orient']):
+                    # Brake: kill momentum from old direction before resuming
+                    try:
+                        maneuver.velocity(0, 0, 0, 0, 0, 0, 0, 1.5)
+                    except Exception:
+                        pass
+                    time.sleep(2.0)
                     ramp_step = 0
                 if corner_det.is_expected(pred['orient']):
                     vy_servo, vz_servo = servo.compute(pred)
             else:
                 no_ridge_count += 1
+
+                # --- Quick forward probe: detect corner before full recovery ---
+                if no_ridge_count == 3:
+                    fwd_dy, fwd_dz = corner_det.forward
+                    # Cross-track direction (perpendicular to forward)
+                    cross_dy, cross_dz = -fwd_dz, fwd_dy
+                    print(f"  PROBE: ridge lost, scanning forward "
+                          f"dir=({fwd_dy},{fwd_dz})")
+                    try:
+                        maneuver.velocity(0, 0, 0, 0, 0, 0, 0, 0.5)
+                    except Exception:
+                        pass
+                    time.sleep(0.5)
+                    pos_now, _ = read_state()
+                    probe_base_y = pos_now[1]
+                    probe_base_z = pos_now[2]
+                    probe_found = False
+                    probe_steps = [i * 0.012 for i in range(1, 14)]
+                    for p_off in probe_steps:
+                        p_y = probe_base_y + fwd_dy * p_off
+                        p_z = probe_base_z + fwd_dz * p_off
+                        if p_y < -0.1 or p_y > 1.2:
+                            break
+                        if p_z < 0.7 or p_z > 2.1:
+                            break
+                        try:
+                            maneuver.goto(CONTACT_BODY_X, p_y, p_z,
+                                          0, GOTO_DURATION)
+                        except Exception:
+                            continue
+                        time.sleep(1.0)
+                        pos, att = read_state()
+                        ee = body_to_ee_tip(pos, att)
+                        pred_p = sensor.sense(ee[1], ee[2], ee[0])
+                        if pred_p:
+                            if not corner_det.is_expected(pred_p['orient']):
+                                print(f"    probe {p_off*1000:+.0f}mm: "
+                                      f"orient={pred_p['orient']}° → CORNER")
+                                corner_det.force_corner(pred_p['orient'])
+                                last_ridge_body_pos = pos.copy()
+                                no_ridge_count = 0
+                                ramp_step = 0
+                                probe_found = True
+                                break
+                            else:
+                                print(f"    probe {p_off*1000:+.0f}mm: "
+                                      f"d={pred_p['signed_d_m']*1000:+.1f}mm "
+                                      f"orient={pred_p['orient']}° (same ridge)")
+                                last_ridge_body_pos = pos.copy()
+                                no_ridge_count = 0
+                                ramp_step = 0
+                                probe_found = True
+                                break
+                        elif sensor.in_contact(ee[0]):
+                            # Wall contact but no ridge — try cross-track wiggle
+                            wiggle_found = False
+                            for w_off in [0.015, -0.015, 0.030, -0.030]:
+                                w_y = p_y + cross_dy * w_off
+                                w_z = p_z + cross_dz * w_off
+                                try:
+                                    maneuver.goto(CONTACT_BODY_X, w_y, w_z,
+                                                  0, GOTO_DURATION)
+                                except Exception:
+                                    continue
+                                time.sleep(0.8)
+                                pos_w, att_w = read_state()
+                                ee_w = body_to_ee_tip(pos_w, att_w)
+                                pred_w = sensor.sense(ee_w[1], ee_w[2], ee_w[0])
+                                if pred_w:
+                                    if not corner_det.is_expected(pred_w['orient']):
+                                        print(f"    probe {p_off*1000:+.0f}mm "
+                                              f"wiggle {w_off*1000:+.0f}mm: "
+                                              f"orient={pred_w['orient']}° → CORNER")
+                                        corner_det.force_corner(pred_w['orient'])
+                                        last_ridge_body_pos = pos_w.copy()
+                                        no_ridge_count = 0
+                                        ramp_step = 0
+                                        probe_found = True
+                                        wiggle_found = True
+                                        break
+                                    else:
+                                        print(f"    probe {p_off*1000:+.0f}mm "
+                                              f"wiggle {w_off*1000:+.0f}mm: "
+                                              f"d={pred_w['signed_d_m']*1000:+.1f}mm "
+                                              f"(same)")
+                                        last_ridge_body_pos = pos_w.copy()
+                                        no_ridge_count = 0
+                                        ramp_step = 0
+                                        probe_found = True
+                                        wiggle_found = True
+                                        break
+                            if wiggle_found:
+                                break
+                            print(f"    probe {p_off*1000:+.0f}mm: (contact, no wiggle)")
+                        else:
+                            print(f"    probe {p_off*1000:+.0f}mm: (air)")
+                    if probe_found:
+                        servo_step += 1
+                        continue
+
+                # --- Full recovery: cross-track scan at last known position ---
                 if no_ridge_count >= 8:
                     backtrack_count += 1
                     if backtrack_count >= 3:
                         print(f"\n[Phase 2] Lost ridge 3 times, stopping")
                         break
-                    recovery_y = float(np.clip(last_ridge_body_pos[1], 0.05, 0.95))
-                    recovery_z = last_ridge_body_pos[2]
+                    recovery_y = float(np.clip(last_ridge_body_pos[1], 0.05, 1.05))
+                    recovery_z = float(np.clip(last_ridge_body_pos[2], 0.80, 1.95))
                     print(f"  RECOVERY #{backtrack_count}: scanning from "
                           f"[{recovery_y:.3f},{recovery_z:.3f}]")
                     try:
@@ -790,6 +917,13 @@ def simulation(sensor_mode='geometric', noise_std=0.0005, max_servo_time=700.0, 
                         if pred_scan and corner_det.is_expected(pred_scan['orient']):
                             print(f"    scan {scan_off*1000:+.0f}mm: "
                                   f"d={pred_scan['signed_d_m']*1000:+.1f}mm ✓")
+                            last_ridge_body_pos = pos.copy()
+                            reacquired = True
+                            break
+                        elif pred_scan and not corner_det.is_expected(pred_scan['orient']):
+                            print(f"    scan {scan_off*1000:+.0f}mm: "
+                                  f"orient={pred_scan['orient']}° → CORNER")
+                            corner_det.force_corner(pred_scan['orient'])
                             last_ridge_body_pos = pos.copy()
                             reacquired = True
                             break

@@ -1,0 +1,68 @@
+<?xml version="1.0" ?>
+<robot name="wall_ridge.urdf">
+
+  <!-- Flat wall surface (horizontal plate) -->
+  <link name="wall">
+    <contact>
+      <friction_anchor/>
+      <lateral_friction value="1.0"/>
+    </contact>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="1.0"/>
+      <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.10 0.10 0.025"/>
+      </geometry>
+      <material name="wall_gray">
+        <color rgba="0.7 0.7 0.8 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.10 0.10 0.025"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- Ridge: 5mm protrusion on top of wall, runs along Y axis -->
+  <!-- Centered at x=0 so sensor can sample both sides -->
+  <link name="ridge">
+    <contact>
+      <friction_anchor/>
+      <lateral_friction value="1.0"/>
+    </contact>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0.01"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.005 0.10 0.005"/>
+      </geometry>
+      <material name="ridge_red">
+        <color rgba="0.7 0.15 0.15 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <box size="0.005 0.10 0.005"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- Ridge sits on top of wall: wall top = 0.0125, ridge center = 0.0125 + 0.0025 = 0.015 -->
+  <joint name="ridge_joint" type="fixed">
+    <origin xyz="0 0 0.015" rpy="0 0 0"/>
+    <parent link="wall"/>
+    <child link="ridge"/>
+  </joint>
+
+</robot>

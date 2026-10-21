@@ -89,8 +89,9 @@ aerial-tactile-sim/
 │   ├── 06_collect_ridge_data.py              Phase 3A: rectangular frame dataset + video
 │   ├── 07_train_ridge_cnn.py                 Phase 4: train ridge_4d CNN (NatureCNN/ResNet)
 │   ├── 08_hough_ridge_detect.py              Phase 4: classical ridge detection (Radon/Hough)
-│   ├── 09_evaluate_comparison.py             Phase 4: hybrid evaluation + comparison plots
-│   └── 10_servo_on_ridge.py                 Phase 3B validation: servo on ridge frame (PyBullet)
+│   ├── 09_evaluate_comparison.py             Phase 4: hybrid evaluation, comparison plots, raw CSV export
+│   ├── 10_servo_on_ridge.py                 Phase 3B validation: servo on ridge frame (PyBullet)
+│   └── 11_hybrid_cnn_orient_radon_distance.py   Phase 4: hybrid v2 (CNN orient into Radon dist) + raw CSV
 │
 ├── src/                                  Phase 2 & 3B: Gazebo + TeleKyb3 (Docker)
 │   ├── 06a-physical-interaction/             Assignment 6a: wall contact + square pattern
@@ -114,48 +115,77 @@ aerial-tactile-sim/
 │       └── hexa-fa-wall-tactile.world        COPY + contact-system plugin + ridge frame
 │
 ├── output/
-│   ├── evaluation/                       Phase 4: comparison plots
+│   ├── evaluation/                       Phase 4: comparison plots + raw predictions CSV + metrics JSON
 │   ├── ridge_dataset/                    Phase 3A: 5001 tactile images + labels
-│   └── trained_models/edge_2d/           Phase 1: retrained CNN weights + params
+│   ├── trained_models/
+│   │   ├── edge_2d/                          Phase 1: retrained CNN weights + params
+│   │   └── ridge_4d/                         Phase 4: NatureCNN, ResNet, hybrid models (.pth + config)
+│   ├── aerial_servo_logs/                Phase 3B: Gazebo servo run data
+│   │   ├── servo_data*.npz                   servo loop log (EE pos, sensor, corrections)
+│   │   └── pom.npz                           full flight state (extracted from pom.log, 155MB to 25MB)
+│   ├── ridge_servo_log.csv               Phase 3B: PyBullet ridge servo log
+│   ├── ridge_4d_train_files.txt          train split file list (4000 images)
+│   └── ridge_4d_val_files.txt            val split file list (1001 images)
 │
-│   --- clone these into the project directory (not included in the repo) ---
+├── patches/                          modifications to apply on top of cloned servo_control
+│   ├── apply_patches.sh                  one-step script: applies all changes below
+│   ├── stimuli/wall_ridge/               wall_ridge_frame.urdf + variants (our URDF)
+│   └── data/ridge_4d/tap/               targets.csv + collection_params.json (train/val metadata)
 │
-├── tacto/                            git clone https://github.com/facebookresearch/tacto
-├── tactile_gym_2/                    git clone https://github.com/yijionglin/tactile_gym_2
-└── servo_control/                    git clone https://github.com/ac-93/tactile_gym_servo_control
+│   --- clone into the project directory (not included) ---
+│
+├── servo_control/                    git clone https://github.com/ac-93/tactile_gym_servo_control @ e02cd60
+│                                     then: bash patches/apply_patches.sh (adds ridge_4d task + fixes)
+└── tactile_gym_2/                    git clone https://github.com/yijionglin/tactile_gym_2 @ 28417eb
+                                      (required: provides tactile_gym utilities used by training/eval scripts)
+                                      tacto/ is optional, only needed for 01_test_tacto.py demo
 ```
 
 ---
 
 ## Dependencies: What to Clone and Why
 
-These three repos form the tactile simulation stack. Each is an independent open-source
-project; we use them as-is with minor compatibility fixes.
+Three external repos are needed. None are included; clone them and apply our modifications.
 
-| Clone into | Source repo | What it does | We use it for |
+| Clone into | Source repo | What it does | Required? |
 |---|---|---|---|
-| `tacto/` | [facebookresearch/tacto](https://github.com/facebookresearch/tacto) | Renders DIGIT/GelSight tactile images using PyBullet + pyrender | Phase 1: understanding tactile rendering |
-| `tactile_gym_2/` | [yijionglin/tactile_gym_2](https://github.com/yijionglin/tactile_gym_2) | PyBullet environments with simulated TacTip/DIGIT/DigiTac sensors | Sensor simulation + utilities |
-| `servo_control/` | [ac-93/tactile_gym_servo_control](https://github.com/ac-93/tactile_gym_servo_control) | Full PBTS pipeline: data collection, CNN training, servo control. Includes pretrained models and 7000 labelled tactile images | Phase 1: entire tactile servoing pipeline |
+| `servo_control/` | [ac-93/tactile_gym_servo_control](https://github.com/ac-93/tactile_gym_servo_control) | CNN training, servo control, data collection framework | **Yes**, our scripts import from it |
+| `tactile_gym_2/` | [yijionglin/tactile_gym_2](https://github.com/yijionglin/tactile_gym_2) | PyBullet environments + TacTip sensor simulation + utilities | **Yes**, used by training, evaluation, and servo scripts |
+| `tacto/` | [facebookresearch/tacto](https://github.com/facebookresearch/tacto) | DIGIT/GelSight tactile rendering | Optional, only for `01_test_tacto.py` demo |
 
-**Clone commands:**
+**Clone and setup (pinned to tested commits):**
 
 ```bash
-cd ~/aerial-tactile-sim   # or wherever you cloned this repo
-git clone https://github.com/facebookresearch/tacto
-git clone https://github.com/yijionglin/tactile_gym_2
+cd ~/aerial-tactile-sim
+
+# 1. servo_control (required)
 git clone https://github.com/ac-93/tactile_gym_servo_control servo_control
+cd servo_control && git checkout e02cd60 && cd ..
+
+# 2. Apply our modifications (ridge_4d task, URDF, compat fixes, dataset metadata)
+bash patches/apply_patches.sh
+
+# 3. tactile_gym_2 (required)
+git clone https://github.com/yijionglin/tactile_gym_2
+cd tactile_gym_2 && git checkout 28417eb && cd ..
+
+# Optional: git clone https://github.com/facebookresearch/tacto (checkout a21d0c4)
 ```
 
-### Compatibility fixes applied to cloned repos
+### What `apply_patches.sh` does
 
-The repos were written for older Python/NumPy. Three small fixes needed:
+The upstream servo_control repo was written for older Python/NumPy and does not
+include our ridge_4d task. The patch script applies these changes:
 
-| File | Issue | Fix |
-|---|---|---|
-| `servo_control/.../collect_data.py` | `np.warnings` removed in NumPy 2.x | Replaced with `import warnings; warnings.filterwarnings(...)` |
-| `servo_control/.../data_collection_utils.py` | `np.hstack` rejects mixed-type tuples in NumPy 2.x | Replaced with Python list unpacking `[*pose, *move]` |
-| `servo_control/.../servo_control.py` | `device` variable used but never passed to function | Added `device` parameter to `run_servo_control()` |
+| Change | What |
+|---|---|
+| ridge_4d task | Adds `ridge_4d` (out_dim=6, labels: y, z, Rx, Rz) to `learning_utils.py` |
+| wall_ridge URDFs | Copies `wall_ridge_frame.urdf` + variants into `stimuli/wall_ridge/` |
+| ridge_4d data | Copies `targets.csv` + `collection_params.json` for train/val splits |
+| ridge_4d models | Copies trained weights from `output/trained_models/ridge_4d/` |
+| NumPy 2.x fix | `np.warnings` replaced with `import warnings` in `collect_data.py` |
+| NumPy 2.x fix | `np.hstack` replaced with list unpacking in `data_collection_utils.py` |
+| device fix | Adds missing `device` parameter to `run_servo_control()` |
 
 ---
 
@@ -296,7 +326,7 @@ reactively with no trajectory planning, purely local feedback at each timestep.
 To compare with the pretrained (250 epoch) model, change `model_dir` in the script to
 `.../learned_models/edge_2d/tap`.
 
-<video src="https://github.com/user-attachments/assets/084c75b0-ccc1-4199-8ce4-0634203cb4a7" width="600" controls></video>
+<video src="https://github.com/user-attachments/assets/516cd5a0-d8d3-4f86-b76d-d8c1c99f9996" width="600" controls></video>
 
 ---
 
@@ -606,7 +636,7 @@ python 10_servo_on_ridge.py              # GUI + video
 python 10_servo_on_ridge.py --no-video   # GUI only
 ```
 
-<video src="https://github.com/user-attachments/assets/6084fdbd-eca7-4fcd-ab22-24ce64322e31" width="600" controls></video>
+<video src="https://github.com/user-attachments/assets/529c298a-f41c-4a7c-babb-85a8147f7871" width="600" controls></video>
 
 ---
 
@@ -641,12 +671,14 @@ or `None` when no contact. When CNN replaces this, servo code stays unchanged.
 
 | Parameter | Value | Rationale |
 |---|---|---|
-| `SERVO_LAMBDA` | 0.15 | Convergence rate (1/s), stability: λ·Δt < 1 |
+| `SERVO_LAMBDA` | 0.35 | Convergence rate (1/s), tuned up from 0.15 for faster tracking |
 | `VEL_DURATION` | 2.0 s | Velocity command duration (overlaps next step) |
 | `STEP_SLEEP` | 1.0 s | Sensor loop rate (~1 Hz) |
-| `FORWARD_SPEED` | 0.035 | 35mm/s along ridge |
+| `FORWARD_SPEED` | 0.020 | 20mm/s along ridge (reduced from 35mm/s for 1Hz loop stability) |
 | `MAX_SERVO_VEL` | 20 mm/s | Cross-track velocity clamp |
-| `CONTACT_BODY_X` | 1.45 | AF x-reference: F ≈ K_x·(1.45−body_x) ≈ 7N |
+| `D_TARGET` | 10 mm | Desired cross-track offset from ridge |
+| `DEAD_ZONE` | 3 mm | No correction when error < 3mm |
+| `CONTACT_BODY_X` | 1.45 | AF x-reference: F = K_x·(1.45 - body_x) ~ 7N |
 | `RAMP_STEPS` | 5 | Ramp forward velocity to avoid roll transients |
 | `DOME_PROXIMITY` | 5 mm | Soft dome contact detection range |
 
@@ -726,30 +758,35 @@ geometry.
 
 ### Current Status (drone)
 
-Best result: bottom ridge tracked with cross-track error converging, 2 corners
-detected (bottom→left, left→top). Full rectangle traversal not yet completed.
-Intermittent contact loss during velocity transitions. EE oscillates in/out of
-dome detection range (5mm). Root cause fix in progress.
+Best result: 3 corners detected (bottom to left, left to top, top to right),
+265 servo steps. Cross-track error converges on straight sections. Tuning
+SERVO_LAMBDA from 0.15 to 0.35 and FORWARD_SPEED from 35mm/s to 20mm/s
+significantly improved tracking stability. Full rectangle traversal (4 corners)
+not yet completed.
 
 **EE trajectory from latest servo run:**
 
 <img src="assets/ee_trajectory_phase3b.png" width="450">
 
+**Hexarotor tactile servo flight (4x speed):**
+
+<video src="https://github.com/user-attachments/assets/78412ee5-0a6f-4e9e-bc98-0afc0078845b" width="600" controls></video>
+
 ### Known Limitations
 
-- Pitch-EE coupling: contact force → pitch moment (F·L_bar=0.6m) → EE displacement
-  (~10mm/° pitch), creating systematic cross-track offset
-- Intermittent contact loss during velocity transitions
+- Pitch-EE coupling: contact force creates pitch moment (F * L_bar = 0.6m),
+  displacing EE ~10mm per degree of pitch. This is the dominant cross-track error source
 - Balancing contact force vs pitch coupling: higher CONTACT_BODY_X = more reliable
   contact but more pitch disturbance
 - Geometric sensor approximates CNN behavior; real deployment needs TACTO + CNN
+- 4th corner (right to bottom) not yet reached. Contact loss during long traversals
+  triggers recovery scan, costing time
 
 ### Next Steps
 
-1. Eliminate contact loss with the geometric sensor (root cause fix)
-2. Complete full rectangle traversal (4 corners, 4 ridges)
-3. Integrate PyBullet/TACTO for realistic tactile image rendering (Phase 3C)
-4. Train CNN on TACTO data, replace geometric sensor (drop-in, same output format)
+1. Complete full rectangle traversal (4 corners, 4 ridges)
+2. Integrate PyBullet/TACTO for realistic tactile image rendering (Phase 3C)
+3. Train CNN on TACTO data, replace geometric sensor (drop-in, same output format)
 
 ---
 

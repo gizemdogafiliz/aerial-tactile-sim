@@ -295,6 +295,21 @@ def main():
     out_path = os.path.join(OUTPUT_DIR, 'hybrid_v2_comparison.png')
     plt.savefig(out_path, dpi=150)
     print(f"\n  Plot saved: {out_path}")
+
+    # Save raw hybrid predictions
+    raw = pd.DataFrame({
+        'image': targets['sensor_image'].values[:n],
+        'gt_abs_distance': gt_abs_dist,
+        'gt_orient': gt_orient,
+        'cnn_orient': cnn_orient_pred,
+        'cnn_abs_distance': cnn_only_dist,
+        'radon_orient': radon_orient_pred,
+        'radon_abs_distance': radon_only_dist,
+        'hybrid_v2_abs_distance': hybrid_v2_dist,
+    })
+    raw_path = os.path.join(OUTPUT_DIR, 'hybrid_v2_raw_predictions.csv')
+    raw.to_csv(raw_path, index=False)
+    print(f"  Hybrid raw predictions saved: {raw_path}")
     print(f"  Done!")
 
 
