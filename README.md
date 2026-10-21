@@ -326,7 +326,7 @@ reactively with no trajectory planning, purely local feedback at each timestep.
 To compare with the pretrained (250 epoch) model, change `model_dir` in the script to
 `.../learned_models/edge_2d/tap`.
 
-<video src="https://github.com/user-attachments/assets/516cd5a0-d8d3-4f86-b76d-d8c1c99f9996" width="600" controls></video>
+<video src="https://github.com/user-attachments/assets/9cd0791d-3d92-4a49-9aeb-c0103928dd61" width="600" controls></video>
 
 ---
 
@@ -636,7 +636,7 @@ python 10_servo_on_ridge.py              # GUI + video
 python 10_servo_on_ridge.py --no-video   # GUI only
 ```
 
-<video src="https://github.com/user-attachments/assets/529c298a-f41c-4a7c-babb-85a8147f7871" width="600" controls></video>
+<video src="https://github.com/user-attachments/assets/c42495b0-862b-4f22-bd2b-a1a632f88917" width="600" controls></video>
 
 ---
 
@@ -770,7 +770,7 @@ not yet completed.
 
 **Hexarotor tactile servo flight (4x speed):**
 
-<video src="https://github.com/user-attachments/assets/78412ee5-0a6f-4e9e-bc98-0afc0078845b" width="600" controls></video>
+<video src="https://github.com/user-attachments/assets/0af72df0-d884-436f-817c-67bae6a61b91" width="600" controls></video>
 
 ### Known Limitations
 
