@@ -587,16 +587,21 @@ since it requires no classical preprocessing pipeline.
 ```
 At each timestep:
   1. Tactile image → CNN extracts distance, orient, depth, yaw
-  2. Orient (H or V) → determines correction axis (Y or X)
+  2. Orient (H or V) → determines correction axis (Y or Z)
   3. error_position = desired_distance - predicted_distance  → move along correction axis
   4. error_depth    = desired_depth    - predicted_depth     → move along contact normal
   5. error_yaw      = 0                - predicted_yaw       → rotate to align with ridge
-  6. Admittance controller converts errors to velocity commands → drone moves
+  6. Velocity command sent to maneuver.velocity() → drone moves
 ```
 
-Example: sensor detects horizontal ridge 3mm to the left, 0.5mm too deep, 4° rotated.
-Controller outputs: move right 3mm, retract 0.5mm, rotate -4°. Next frame re-estimates,
-loop converges to desired tracking pose.
+(Current drone implementation uses steps 1-3 only: cross-track correction
+with geometric sensor. Depth is passively maintained by flying to a fixed
+wall-contact position (CONTACT_BODY_X) with admittance compliance.
+Depth servo, yaw servo, and CNN integration are planned for Phase 5.)
+
+Example: sensor detects horizontal ridge 3mm to the left. Controller outputs:
+move right at v = -0.35 * 3mm. Next frame re-estimates, loop converges to
+desired tracking offset.
 
 ### How to run
 
